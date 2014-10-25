@@ -7,9 +7,12 @@ import microservices.october.messages.BodyCreationMessage;
 import microservices.october.messages.BodyDestroyedMessage;
 import microservices.october.messages.BodyMovementMessage;
 import microservices.october.messages.TimeMessage;
+import microservices.october.messages.UniverseDiffMessage;
 import microservices.october.messages.UniverseMessage;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Test {
@@ -22,12 +25,14 @@ public class Test {
     public static final String TIME_TOPIC = "time";
     public static final String BODY_MOVEMENT_TOPIC = "body.movement";
     public static final String UNIVERSE_TOPIC = "universe";
+    public static final String PLANETS_THAT_MOVE_TOPIC = "universe.changes";
 
     private ConnectionFactory connectionFactory = setUpConnectionFactory();
     private Publisher publisher = new Publisher(connectionFactory, EXCHANGE_NAME);
     private Subscriber subscriber = new Subscriber(connectionFactory, EXCHANGE_NAME, TIME_TOPIC, BODY_CREATED_TOPIC, BODY_DESTROYED_TOPIC, BODY_MOVEMENT_TOPIC);
     private ObjectMapper objectMapper = new ObjectMapper();
     private Map<String, BodyCreationMessage> bodies = new HashMap<>();
+    private List<String> modifiedIds = new ArrayList<>();
 
     private ConnectionFactory setUpConnectionFactory() {
         ConnectionFactory factory = new ConnectionFactory();
@@ -53,6 +58,7 @@ public class Test {
 
         bodyCreationMessage.location = bodyMovementMessage.location;
         bodyCreationMessage.velocity = bodyMovementMessage.velocity;
+        modifiedIds.add(bodyMovementMessage.id);
     }
 
     private void handleTimeMessage(TimeMessage timeMessage) throws Exception {
@@ -60,6 +66,13 @@ public class Test {
         universeMessage.time = timeMessage.time;
         universeMessage.bodies = bodies.values();
         publisher.publish(UNIVERSE_TOPIC, objectMapper.writeValueAsString(universeMessage));
+
+        UniverseDiffMessage universeDiffMessage = new UniverseDiffMessage();
+        universeDiffMessage.time = timeMessage.time;
+        universeDiffMessage.ids = modifiedIds;
+        publisher.publish(PLANETS_THAT_MOVE_TOPIC, objectMapper.writeValueAsString(universeDiffMessage));
+
+        modifiedIds.clear();
     }
 
     private void processOneMessage() throws Exception {
